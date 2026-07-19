@@ -15,15 +15,79 @@ export default function LyricsView() {
   const containerRef = useRef(null);
   const lineRefs = useRef([]);
 
-  // Split lyrics into non-empty lines
-  const lyricsLines = lyrics
-    ? lyrics.split("\n").map(line => line.trim()).filter(line => line.length > 0)
-    : [];
+  // Parse timestamped lyrics if available
+  const parsedLines = React.useMemo(() => {
+    if (!lyrics) return [];
+    
+    const rawLines = lyrics.split("\n");
+    const parsed = [];
+    const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/g;
+    
+    for (const line of rawLines) {
+      const cleanLine = line.trim();
+      if (!cleanLine) continue;
+      
+      const times = [];
+      let match;
+      timeRegex.lastIndex = 0;
+      
+      while ((match = timeRegex.exec(cleanLine)) !== null) {
+        const mins = parseInt(match[1], 10);
+        const secs = parseInt(match[2], 10);
+        const ms = match[3] ? parseInt(match[3], 10) : 0;
+        const timeInSeconds = mins * 60 + secs + (match[3] && match[3].length === 3 ? ms / 1000 : ms / 100);
+        times.push(timeInSeconds);
+      }
+      
+      const text = cleanLine.replace(/\[\d{2}:\d{2}(?:\.\d{2,3})?\]/g, "").trim();
+      
+      if (times.length > 0) {
+        for (const t of times) {
+          parsed.push({ time: t, text });
+        }
+      } else {
+        parsed.push({ time: null, text: cleanLine });
+      }
+    }
+    
+    parsed.sort((a, b) => {
+      if (a.time === null) return 1;
+      if (b.time === null) return -1;
+      return a.time - b.time;
+    });
+    
+    return parsed;
+  }, [lyrics]);
 
-  // Calculate active line index based on playback progress
-  const activeIndex = duration > 0 && lyricsLines.length > 0
-    ? Math.min(lyricsLines.length - 1, Math.floor((currentTime / duration) * lyricsLines.length))
-    : -1;
+  const hasTimestamps = parsedLines.length > 0 && parsedLines.some(l => l.time !== null);
+
+  const activeIndex = React.useMemo(() => {
+    if (parsedLines.length === 0) return -1;
+
+    if (hasTimestamps && currentTime != null) {
+      // Find the last line whose timestamp is <= currentTime
+      let best = -1;
+      for (let i = 0; i < parsedLines.length; i++) {
+        const t = parsedLines[i].time;
+        if (t !== null && currentTime >= t) {
+          best = i;
+        } else if (t !== null && currentTime < t) {
+          break; // lines are sorted ascending, no need to continue
+        }
+      }
+      return best;
+    }
+
+    // Fallback: position-based estimate for plain lyrics
+    if (duration > 0 && currentTime != null) {
+      return Math.min(
+        parsedLines.length - 1,
+        Math.floor((currentTime / duration) * parsedLines.length)
+      );
+    }
+
+    return -1;
+  }, [currentTime, duration, parsedLines, hasTimestamps]);
 
   // Scroll active line to center of container
   const scrollToActive = useCallback((index) => {
@@ -60,7 +124,7 @@ export default function LyricsView() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-250px)] w-full items-center justify-center gap-12 lg:gap-16 max-w-[1400px] mx-auto py-4">
+    <div className="flex flex-col lg:flex-row h-full w-full items-center justify-center gap-12 lg:gap-16 max-w-[1400px] mx-auto py-4 overflow-hidden">
       {/* Left: Album Art Section (Desktop only) */}
       <section className="hidden lg:flex flex-1 flex-col items-center justify-center max-w-md w-full">
         {currentTrack ? (
@@ -108,16 +172,12 @@ export default function LyricsView() {
       </section>
 
       {/* Right: Lyrics Scrolling Panel */}
-      <section className="flex-1 w-full h-full max-w-xl glass-panel rounded-lg p-panel-padding relative flex flex-col specular-highlight border border-white/5 min-h-[400px] lg:min-h-[500px]">
+      <section className="flex-1 w-full h-full max-w-xl glass-panel rounded-lg p-panel-padding relative flex flex-col specular-highlight border border-white/5 min-h-0">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 flex-shrink-0">
           <span className="font-semibold text-[10px] uppercase tracking-widest text-secondary">
-            Real-time Lyrics
+            Lyrics
           </span>
-          <div className="flex gap-4 text-on-surface-variant">
-            <span className="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">closed_caption</span>
-            <span className="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">more_horiz</span>
-          </div>
         </div>
 
         {/* Mobile Header */}
@@ -161,9 +221,9 @@ export default function LyricsView() {
               <div className="w-8 h-8 border-2 border-white/10 border-t-white rounded-full animate-spin"></div>
               <p className="text-xs text-on-surface-variant">Fetching lyrics...</p>
             </div>
-          ) : lyricsLines.length > 0 ? (
+          ) : parsedLines.length > 0 ? (
             <div className="py-[40%] space-y-6 px-2">
-              {lyricsLines.map((line, index) => {
+              {parsedLines.map((line, index) => {
                 const isActive = index === activeIndex;
                 return (
                   <p
@@ -171,7 +231,7 @@ export default function LyricsView() {
                     ref={(el) => { lineRefs.current[index] = el; }}
                     className={`lyric-line text-lg md:text-2xl leading-relaxed text-left transition-all duration-500 ${
                       isActive
-                        ? "text-white font-bold opacity-100 scale-[1.04] origin-left"
+                        ? "text-white font-bold opacity-100 scale-[1.04] origin-left pl-4"
                         : "text-white/30 font-semibold opacity-50 blur-[0.5px]"
                     }`}
                     style={{
@@ -180,7 +240,7 @@ export default function LyricsView() {
                       filter: isActive ? "blur(0)" : "blur(0.6px)",
                     }}
                   >
-                    {line}
+                    {line.text}
                   </p>
                 );
               })}

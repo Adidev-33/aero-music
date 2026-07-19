@@ -97,18 +97,122 @@ def get_queue(video_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/lyrics/{browse_id}")
-def get_lyrics(browse_id: str):
+def get_lyrics(
+    browse_id: str,
+    title: str = Query(None),
+    artist: str = Query(None),
+    duration: float = Query(None)
+):
     if not yt:
         raise HTTPException(status_code=500, detail="YTMusic client not initialized")
+    
+    import urllib.request, json as json_mod, urllib.parse
+    
+    # 1. Try lrclib.net for synced (timestamped) lyrics first
+    if title and artist:
+        try:
+            params = urllib.parse.urlencode({
+                "track_name": title,
+                "artist_name": artist,
+                **({"duration": int(duration)} if duration else {})
+            })
+            lrclib_url = f"https://lrclib.net/api/get?{params}"
+            req = urllib.request.Request(lrclib_url, headers={"User-Agent": "AeroMusic/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                lrc_data = json_mod.loads(resp.read().decode())
+                synced = lrc_data.get("syncedLyrics") or ""
+                plain = lrc_data.get("plainLyrics") or ""
+                if synced:
+                    logger.info(f"lrclib.net synced lyrics found for '{title}'")
+                    return {"lyrics": synced, "source": "lrclib.net", "synced": True}
+                if plain:
+                    logger.info(f"lrclib.net plain lyrics found for '{title}'")
+                    return {"lyrics": plain, "source": "lrclib.net", "synced": False}
+        except Exception as lrc_err:
+            logger.warning(f"lrclib.net lookup failed for '{title}': {lrc_err}")
+    
+    # 2. Fall back to YouTube Music lyrics
     try:
-        logger.info(f"Fetching lyrics for browse_id={browse_id}")
+        logger.info(f"Fetching YTMusic lyrics for browse_id={browse_id}")
         lyrics_data = yt.get_lyrics(browse_id)
         if lyrics_data and lyrics_data.get("lyrics"):
-            return lyrics_data
+            return {**lyrics_data, "source": "ytmusic", "synced": False}
         return {"lyrics": "Lyrics not available for this track.", "source": "Fallback"}
     except Exception as e:
         logger.error(f"Failed to get lyrics for {browse_id}: {e}")
         return {"lyrics": "Lyrics not available for this track.", "source": "Fallback"}
+
+@app.get("/api/suggestions")
+def get_suggestions(q: str = Query(..., description="Query for suggestions")):
+    if not yt:
+        raise HTTPException(status_code=500, detail="YTMusic client not initialized")
+    try:
+        logger.info(f"Fetching suggestions for query '{q}'")
+        suggestions = yt.get_search_suggestions(q)
+        return suggestions
+    except Exception as e:
+        logger.error(f"Failed to get suggestions: {e}")
+        return []
+
+@app.get("/api/trending")
+def get_trending(country: str = Query(None), country_name: str = Query(None)):
+    if not yt:
+        raise HTTPException(status_code=500, detail="YTMusic client not initialized")
+    
+    import urllib.request, json as json_mod
+
+    # Detect location server-side if not provided
+    location_label = "Your Area"
+    if not country:
+        try:
+            req = urllib.request.Request(
+                "https://ipapi.co/json/",
+                headers={"User-Agent": "AeroMusic/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                geo = json_mod.loads(resp.read().decode())
+                country = geo.get("country", "US")
+                country_name = geo.get("country_name", "United States")
+                city = geo.get("city", "")
+                location_label = f"{city}, {country_name}" if city else country_name
+        except Exception as geo_err:
+            logger.warning(f"Server-side geo detection failed: {geo_err}")
+            country = "US"
+            country_name = "United States"
+            location_label = "United States"
+    else:
+        location_label = country_name or country
+
+    try:
+        logger.info(f"Fetching trending for country={country}, country_name={country_name}")
+        results = []
+
+        if country:
+            try:
+                charts = yt.get_charts(country=country.upper())
+                if charts and "songs" in charts and "items" in charts["songs"]:
+                    results = charts["songs"]["items"]
+            except Exception as charts_err:
+                logger.warning(f"Failed to get native charts for {country}: {charts_err}")
+
+        if not results:
+            search_query = "trending songs"
+            if country_name:
+                search_query += f" {country_name}"
+            elif country:
+                search_query += f" {country}"
+            logger.info(f"Using search fallback for trending: '{search_query}'")
+            results = yt.search(search_query, filter="songs")
+
+        return {"location": location_label, "tracks": results}
+    except Exception as e:
+        logger.error(f"Failed to get trending: {e}")
+        try:
+            fallback = yt.search("trending songs", filter="songs")
+            return {"location": location_label, "tracks": fallback}
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

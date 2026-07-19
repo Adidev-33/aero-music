@@ -25,35 +25,48 @@ export default function NowPlayingView() {
     onNext,
     onPrev,
     onSeek,
-    onToggleLike
+    onToggleLike,
+    shuffle,
+    repeatMode,
+    onToggleShuffle,
+    onToggleRepeat
   } = useOutletContext();
   const getTrackSubtitle = (track) => {
-    if (!track) return "";
-    if (track.artists) {
-      return track.artists.map(a => a.name).join(", ");
+    try {
+      if (!track) return "";
+      if (Array.isArray(track.artists)) {
+        return track.artists.map(a => a.name).join(", ");
+      }
+      if (typeof track.artists === "string") return track.artists;
+      return track.artist || "Unknown Artist";
+    } catch (e) {
+      console.error("Error in getTrackSubtitle:", e);
+      return "Unknown Artist";
     }
-    return track.artist || "Unknown Artist";
   };
 
   const getTrackImage = (track) => {
-    if (track?.thumbnail && track.thumbnail.length > 0) {
-      return track.thumbnail[track.thumbnail.length - 1].url;
-    }
-    if (track?.thumbnails && track.thumbnails.length > 0) {
-      return track.thumbnails[track.thumbnails.length - 1].url;
+    try {
+      if (!track) return "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500&auto=format&fit=crop";
+      if (typeof track.thumbnail === "string") return track.thumbnail;
+      if (typeof track.thumbnails === "string") return track.thumbnails;
+      const thumbs = track.thumbnails || track.thumbnail;
+      if (Array.isArray(thumbs) && thumbs.length > 0) {
+        const last = thumbs[thumbs.length - 1];
+        if (typeof last === "string") return last;
+        if (last && typeof last === "object" && last.url) return last.url;
+      }
+    } catch (e) {
+      console.error("Error in getTrackImage:", e);
     }
     return "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=500&auto=format&fit=crop";
   };
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [dragValue, setDragValue] = React.useState(0);
 
-  const handleProgressClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const width = rect.width;
-    const newPercentage = Math.max(0, Math.min(1, clickX / width));
-    onSeek(newPercentage * duration);
-  };
+  const displayTime = isDragging ? dragValue : currentTime;
+  const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0;
 
   // Up Next: all tracks after the current one in the queue
   const currentQueueIndex = queue?.findIndex(t => t.videoId === currentTrack?.videoId) ?? -1;
@@ -62,17 +75,13 @@ export default function NowPlayingView() {
     : (queue?.filter(t => t.videoId !== currentTrack?.videoId) || []);
 
   return (
-    <div className="grid grid-cols-12 gap-gutter max-w-[1400px] mx-auto items-center min-h-[calc(100vh-250px)] pt-6 md:pt-0">
+    <div className="flex w-full h-full max-w-[1400px] mx-auto overflow-hidden gap-6">
       {/* Centerpiece: Album Art */}
-      <section className="col-span-12 lg:col-span-7 flex flex-col items-center justify-center py-6">
+      <section className="flex-1 hidden lg:flex flex-col items-center justify-center py-6 min-w-0">
         {currentTrack ? (
           <>
-            <div className="relative group animate-float">
-            {/* Grounding Shadow */}
-            <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-[80%] h-12 bg-black/50 blur-[50px] rounded-full opacity-60"></div>
-            
             {/* Album Container */}
-            <div className="relative w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[450px] md:h-[450px] glass-panel rounded-lg p-5 shadow-2xl transition-transform duration-700 hover:scale-[1.02]">
+            <div className="relative w-[280px] h-[280px] sm:w-[340px] sm:h-[340px] md:w-[380px] md:h-[380px] lg:w-[400px] lg:h-[400px] glass-panel rounded-lg p-5 shadow-2xl transition-transform duration-700 hover:scale-[1.02]">
               <div className="w-full h-full rounded overflow-hidden relative shadow-[0_0_80px_rgba(255,255,255,0.05)]">
                 <img
                   src={getTrackImage(currentTrack)}
@@ -84,110 +93,144 @@ export default function NowPlayingView() {
                 <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none"></div>
                 
                 {/* Overlay details */}
-                <div className="absolute bottom-0 left-0 w-full p-6 md:p-8 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col items-start text-left">
-                  <span className="font-label-sm text-label-sm text-primary/60 tracking-[0.2em] uppercase mb-1 md:mb-2 text-[10px]">
+                <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col items-start text-left">
+                  <span className="font-label-sm text-label-sm text-primary/60 tracking-[0.2em] uppercase mb-1 text-[10px]">
                     Currently Streaming
                   </span>
-                  <h2 className="font-display-lg text-primary text-2xl sm:text-3xl md:text-4xl mb-1 line-clamp-1">
+                  <h2 className="font-display-lg text-primary text-xl sm:text-2xl md:text-3xl mb-1 line-clamp-1">
                     {currentTrack.title}
                   </h2>
-                  <p className="font-body-lg text-primary/75 text-sm md:text-base line-clamp-1">
+                  <p className="font-body-lg text-primary/75 text-xs md:text-sm line-clamp-1">
                     {getTrackSubtitle(currentTrack)} {currentTrack.album?.name ? `• ${currentTrack.album.name}` : ""}
                   </p>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Mobile Playback Controller */}
+          {/* Mobile Playback Controller - shown only on mobile (section is hidden on mobile anyway) */}
           <div className="flex lg:hidden flex-col items-center gap-4 w-full max-w-[300px] sm:max-w-[400px] mt-10 px-2">
             {/* Seekbar */}
             <div className="w-full flex items-center gap-3">
               <span className="text-[10px] text-on-surface-variant w-8 text-right">
-                {formatTime(currentTime)}
+                {formatTime(displayTime)}
               </span>
-              <div
-                onClick={handleProgressClick}
-                className="flex-1 h-1.5 bg-white/10 rounded-full relative group cursor-pointer"
-              >
-                <div
-                  className="absolute inset-y-0 left-0 bg-primary rounded-full"
-                  style={{ width: `${progressPercent}%` }}
-                >
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full opacity-100 shadow-[0_0_10px_white]"></div>
-                </div>
-              </div>
+              <input
+                type="range"
+                min="0"
+                max={duration || 100}
+                value={displayTime}
+                onMouseDown={() => {
+                  setIsDragging(true);
+                  setDragValue(currentTime);
+                }}
+                onTouchStart={() => {
+                  setIsDragging(true);
+                  setDragValue(currentTime);
+                }}
+                onChange={(e) => {
+                  setDragValue(Number(e.target.value));
+                }}
+                onMouseUp={() => {
+                  setIsDragging(false);
+                  onSeek(dragValue);
+                }}
+                onTouchEnd={() => {
+                  setIsDragging(false);
+                  onSeek(dragValue);
+                }}
+                className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary focus:outline-none"
+                style={{
+                  background: `linear-gradient(to right, #ffffff 0%, #ffffff ${progressPercent}%, rgba(255, 255, 255, 0.1) ${progressPercent}%, rgba(255, 255, 255, 0.1) 100%)`
+                }}
+              />
               <span className="text-[10px] text-on-surface-variant w-8">
                 {formatTime(duration)}
               </span>
             </div>
 
             {/* Control Buttons */}
-            <div className="flex items-center justify-center gap-8 mt-2 w-full">
+            <div className="flex items-center justify-between mt-2 w-full px-2 gap-2">
               <button 
                 onClick={onToggleLike} 
                 className={`text-xl transition-all active:scale-95 flex items-center justify-center ${isLiked ? "text-red-500 scale-110" : "text-on-surface-variant hover:text-primary"}`}
               >
-                <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: isLiked ? "'FILL' 1" : "'FILL' 0" }}>
+                <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: isLiked ? "'FILL' 1" : "'FILL' 0" }}>
                   favorite
                 </span>
               </button>
+              
+              <button 
+                onClick={onToggleShuffle} 
+                className={`text-xl transition-all active:scale-95 flex items-center justify-center ${shuffle ? "text-secondary font-bold" : "text-on-surface-variant hover:text-primary"}`}
+                title="Shuffle"
+              >
+                <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: shuffle ? "'FILL' 1" : "'FILL' 0" }}>
+                  shuffle
+                </span>
+              </button>
+
               <button 
                 onClick={onPrev} 
-                className="text-primary text-3xl cursor-pointer hover:scale-110 active:scale-90 transition-all flex items-center justify-center"
+                className="text-primary text-2xl cursor-pointer hover:scale-110 active:scale-90 transition-all flex items-center justify-center"
               >
-                <span className="material-symbols-outlined text-[36px]">skip_previous</span>
+                <span className="material-symbols-outlined text-[30px]">skip_previous</span>
               </button>
+              
               <button
                 onClick={onPlayPause}
-                className="w-14 h-14 rounded-full bg-primary text-background flex items-center justify-center cursor-pointer hover:scale-105 active:scale-90 transition-all shadow-lg shadow-primary/20"
+                className="w-12 h-12 rounded-full bg-primary text-background flex items-center justify-center cursor-pointer hover:scale-105 active:scale-90 transition-all shadow-lg shadow-primary/20 flex-shrink-0"
               >
-                <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                   {isPlaying ? "pause" : "play_arrow"}
                 </span>
               </button>
+              
               <button 
                 onClick={onNext} 
-                className="text-primary text-3xl cursor-pointer hover:scale-110 active:scale-90 transition-all flex items-center justify-center"
+                className="text-primary text-2xl cursor-pointer hover:scale-110 active:scale-90 transition-all flex items-center justify-center"
               >
-                <span className="material-symbols-outlined text-[36px]">skip_next</span>
+                <span className="material-symbols-outlined text-[30px]">skip_next</span>
               </button>
+
+              <button 
+                onClick={onToggleRepeat} 
+                className={`text-xl transition-all active:scale-95 flex items-center justify-center ${repeatMode !== "none" ? "text-secondary font-bold" : "text-on-surface-variant hover:text-primary"}`}
+                title={`Repeat: ${repeatMode}`}
+              >
+                <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: repeatMode !== "none" ? "'FILL' 1" : "'FILL' 0" }}>
+                  {repeatMode === "one" ? "repeat_one" : "repeat"}
+                </span>
+              </button>
+
               <button 
                 onClick={() => setActiveTab("lyrics")} 
                 className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center w-8 h-8"
               >
-                <span className="material-symbols-outlined text-2xl">lyrics</span>
+                <span className="material-symbols-outlined text-[24px]">lyrics</span>
               </button>
             </div>
           </div>
       </>
     ) : (
-          <div className="flex flex-col items-center justify-center p-20 glass-panel rounded-lg w-[350px] h-[350px]">
-            <span className="material-symbols-outlined text-6xl text-white/20 mb-4 animate-pulse">music_note</span>
-            <p className="text-on-surface-variant text-center">No track is currently playing. Search and select a track to begin.</p>
+          <div className="flex flex-col items-center justify-center p-8 sm:p-12 glass-panel rounded-lg w-[320px] h-[320px] max-h-full">
+            <span className="material-symbols-outlined text-5xl text-white/20 mb-4 animate-pulse">music_note</span>
+            <p className="text-on-surface-variant text-center text-sm">No track is currently playing. Search and select a track to begin.</p>
           </div>
         )}
       </section>
 
-      {/* Sidebar: Up Next Queue & Lyrics Preview */}
-      <aside className="col-span-12 lg:col-span-5 h-full flex flex-col justify-between py-6">
-        <div className="glass-panel rounded-lg p-panel-padding flex flex-col gap-element-gap border border-white/5 h-full justify-between min-h-[480px]">
+      <aside className="w-full lg:w-[420px] flex-shrink-0 h-full flex flex-col py-2">
+        <div className="glass-panel rounded-lg p-panel-padding flex flex-col gap-element-gap border border-white/5 h-full overflow-hidden">
           {/* Header */}
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-semibold text-xl text-primary flex items-center gap-2">
+          <div className="flex justify-between items-center mb-2 flex-shrink-0">
+            <h3 className="font-semibold text-lg md:text-xl text-primary flex items-center gap-2">
               <span className="material-symbols-outlined text-secondary">queue_music</span>
               Up Next
             </h3>
-            <button 
-              onClick={() => setActiveTab("lyrics")}
-              className="text-xs font-semibold text-secondary hover:text-primary transition-colors uppercase tracking-wider"
-            >
-              Lyrics View
-            </button>
           </div>
 
           {/* Queue List */}
-          <div className="flex-1 overflow-y-auto max-h-[300px] pr-2 space-y-3 no-scrollbar">
+          <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar">
             {upNextTracks.length > 0 ? (
               upNextTracks.map((track, idx) => (
                 <div
@@ -231,7 +274,7 @@ export default function NowPlayingView() {
           {lyricsSnippet && (
             <div 
               onClick={() => setActiveTab("lyrics")}
-              className="mt-6 pt-4 border-t border-white/5 cursor-pointer group"
+              className="mt-auto pt-4 border-t border-white/5 cursor-pointer group"
             >
               <div className="glass-card p-4 rounded-lg bg-primary/5 hover:bg-white/10 transition-colors border border-white/5">
                 <span className="text-[10px] font-semibold text-primary/40 uppercase tracking-widest block mb-2">

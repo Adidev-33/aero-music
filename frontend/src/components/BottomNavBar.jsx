@@ -1,6 +1,8 @@
 import React from "react";
 
 export default function BottomNavBar({ activeTab, setActiveTab }) {
+  const isLibraryActive = activeTab === "library" || activeTab === "likedsongs" || activeTab.startsWith("playlist");
+
   return (
     <nav className="flex md:hidden fixed bottom-0 left-0 w-full h-16 bg-surface/90 backdrop-blur-2xl border-t border-white/10 z-50 justify-around items-center text-on-surface-variant shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
       {/* Home */}
@@ -19,16 +21,32 @@ export default function BottomNavBar({ activeTab, setActiveTab }) {
         <span className="text-[9px] font-bold uppercase tracking-wider">Home</span>
       </button>
 
-      {/* Library */}
+      {/* Search */}
       <button
-        onClick={() => setActiveTab("library")}
+        onClick={() => setActiveTab("search")}
         className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors ${
-          activeTab === "library" ? "text-primary" : "text-on-surface-variant opacity-75"
+          activeTab === "search" ? "text-primary" : "text-on-surface-variant opacity-75"
         }`}
       >
         <span 
           className="material-symbols-outlined text-[24px]" 
-          style={{ fontVariationSettings: activeTab === "library" ? "'FILL' 1" : "'FILL' 0" }}
+          style={{ fontVariationSettings: activeTab === "search" ? "'FILL' 1" : "'FILL' 0" }}
+        >
+          search
+        </span>
+        <span className="text-[9px] font-bold uppercase tracking-wider">Search</span>
+      </button>
+
+      {/* Library */}
+      <button
+        onClick={() => setActiveTab("library")}
+        className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors ${
+          isLibraryActive ? "text-primary" : "text-on-surface-variant opacity-75"
+        }`}
+      >
+        <span 
+          className="material-symbols-outlined text-[24px]" 
+          style={{ fontVariationSettings: isLibraryActive ? "'FILL' 1" : "'FILL' 0" }}
         >
           library_music
         </span>

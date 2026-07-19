@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 
 export default function LibraryView() {
+  const navigate = useNavigate();
   const {
     likedSongs = [],
     playlists = [],
@@ -68,7 +69,7 @@ export default function LibraryView() {
               return (
                 <div
                   key={idx}
-                  onClick={() => onPlayPlaylist(playlist.name, playlist.tracks)}
+                  onClick={() => navigate(`/playlist/${encodeURIComponent(playlist.name)}`)}
                   className="flex-shrink-0 w-60 snap-start group cursor-pointer"
                 >
                   <div className="glass-card aspect-square rounded-lg mb-4 overflow-hidden relative border border-white/5">
@@ -79,9 +80,17 @@ export default function LibraryView() {
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="material-symbols-outlined text-primary text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        play_circle
-                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPlayPlaylist(playlist.name, playlist.tracks);
+                        }}
+                        className="w-14 h-14 rounded-full bg-primary text-background flex items-center justify-center hover:scale-110 active:scale-95 transition-transform shadow-lg glow-button"
+                      >
+                        <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                          play_arrow
+                        </span>
+                      </button>
                     </div>
                   </div>
                   <h3 className="font-semibold text-body-lg text-primary truncate">
@@ -116,7 +125,7 @@ export default function LibraryView() {
         </div>
 
         <div 
-          onClick={playLikedSongs}
+          onClick={() => navigate("/likedsongs")}
           className={`glass-panel rounded-lg p-6 flex items-center gap-gutter group cursor-pointer hover:bg-white/5 transition-all border border-white/5 ${
             likedSongs.length === 0 ? "pointer-events-none opacity-60" : ""
           }`}
@@ -134,6 +143,10 @@ export default function LibraryView() {
           </div>
           {likedSongs.length > 0 && (
             <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                playLikedSongs();
+              }}
               className="w-14 h-14 rounded-full bg-primary text-background flex items-center justify-center hover:scale-110 active:scale-95 transition-transform shadow-lg glow-button"
             >
               <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>

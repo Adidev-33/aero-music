@@ -36,18 +36,17 @@ export default function PlayerBar({
   onSeek,
   onVolumeChange,
   onToggleLike,
+  onToggleShuffle,
+  onToggleRepeat,
+  onAddToPlaylistTrigger,
   activeTab,
   setActiveTab
 }) {
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [dragValue, setDragValue] = React.useState(0);
 
-  const handleProgressClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const width = rect.width;
-    const newPercentage = Math.max(0, Math.min(1, clickX / width));
-    onSeek(newPercentage * duration);
-  };
+  const displayTime = isDragging ? dragValue : currentTime;
+  const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0;
 
   const trackImageUrl = getTrackImage(currentTrack);
 
@@ -90,22 +89,40 @@ export default function PlayerBar({
           </p>
         </div>
         {currentTrack && (
-          <button 
-            onClick={onToggleLike}
-            className={`hidden sm:block transition-colors duration-200 ${isLiked ? "text-red-500 scale-110" : "text-on-surface-variant hover:text-primary"}`}
-          >
-            <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: isLiked ? "'FILL' 1" : "'FILL' 0" }}>
-              favorite
-            </span>
-          </button>
+          <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+            <button 
+              onClick={onToggleLike}
+              className={`transition-colors duration-200 ${isLiked ? "text-red-500 scale-110" : "text-on-surface-variant hover:text-primary"}`}
+              title={isLiked ? "Unlike" : "Like"}
+            >
+              <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: isLiked ? "'FILL' 1" : "'FILL' 0" }}>
+                favorite
+              </span>
+            </button>
+            <button
+              onClick={() => onAddToPlaylistTrigger(currentTrack)}
+              className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center w-8 h-8"
+              title="Add to Playlist"
+            >
+              <span className="material-symbols-outlined text-2.5xl">
+                playlist_add
+              </span>
+            </button>
+          </div>
         )}
       </div>
 
       {/* Center: Controls & Seek (Desktop only) */}
       <div className="hidden md:flex flex-col items-center gap-2 flex-1 max-w-md">
         <div className="flex items-center gap-6">
-          <button className="text-on-surface-variant hover:text-primary transition-colors">
-            <span className="material-symbols-outlined text-xl">shuffle</span>
+          <button 
+            onClick={onToggleShuffle}
+            className={`transition-colors ${shuffle ? "text-secondary font-bold" : "text-on-surface-variant hover:text-primary"}`}
+            title="Shuffle"
+          >
+            <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: shuffle ? "'FILL' 1" : "'FILL' 0" }}>
+              shuffle
+            </span>
           </button>
           <button 
             onClick={onPrev}
@@ -129,27 +146,51 @@ export default function PlayerBar({
           >
             <span className="material-symbols-outlined">skip_next</span>
           </button>
-          <button className="text-on-surface-variant hover:text-primary transition-colors">
-            <span className="material-symbols-outlined text-xl">repeat</span>
+          <button 
+            onClick={onToggleRepeat}
+            className={`transition-colors ${repeat !== "none" ? "text-secondary font-bold" : "text-on-surface-variant hover:text-primary"}`}
+            title={`RepeatMode: ${repeat}`}
+          >
+            <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: repeat !== "none" ? "'FILL' 1" : "'FILL' 0" }}>
+              {repeat === "one" ? "repeat_one" : "repeat"}
+            </span>
           </button>
         </div>
 
         {/* Seekbar */}
         <div className="w-full flex items-center gap-3">
           <span className="text-[10px] text-on-surface-variant w-8 text-right">
-            {formatTime(currentTime)}
+            {formatTime(displayTime)}
           </span>
-          <div
-            onClick={handleProgressClick}
-            className="flex-1 h-1 bg-white/10 rounded-full relative group cursor-pointer"
-          >
-            <div
-              className="absolute inset-y-0 left-0 bg-primary rounded-full"
-              style={{ width: `${progressPercent}%` }}
-            >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-[0_0_10px_white]"></div>
-            </div>
-          </div>
+          <input
+            type="range"
+            min="0"
+            max={duration || 100}
+            value={displayTime}
+            onMouseDown={() => {
+              setIsDragging(true);
+              setDragValue(currentTime);
+            }}
+            onTouchStart={() => {
+              setIsDragging(true);
+              setDragValue(currentTime);
+            }}
+            onChange={(e) => {
+              setDragValue(Number(e.target.value));
+            }}
+            onMouseUp={() => {
+              setIsDragging(false);
+              onSeek(dragValue);
+            }}
+            onTouchEnd={() => {
+              setIsDragging(false);
+              onSeek(dragValue);
+            }}
+            className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary focus:outline-none"
+            style={{
+              background: `linear-gradient(to right, #ffffff 0%, #ffffff ${progressPercent}%, rgba(255, 255, 255, 0.1) ${progressPercent}%, rgba(255, 255, 255, 0.1) 100%)`
+            }}
+          />
           <span className="text-[10px] text-on-surface-variant w-8">
             {formatTime(duration)}
           </span>
