@@ -53,12 +53,52 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Play/pause silent audio to keep browser background audio context alive
+  // Web Audio API silent context — keeps the browser audio session alive through
+  // screen lock and app switches (same technique used by Spotify/YouTube Music web)
+  const audioCtxRef = useRef(null);
+  const silentSourceRef = useRef(null);
+
+  const startSilentAudioContext = () => {
+    try {
+      if (audioCtxRef.current) return; // already running
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtxRef.current = ctx;
+
+      // Create a 1-second silent buffer that loops forever
+      const bufferSize = ctx.sampleRate;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      // buffer data is silent (all zeros) by default
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(ctx.destination);
+      source.start();
+      silentSourceRef.current = source;
+    } catch (e) {
+      console.log("AudioContext silent keepalive failed:", e);
+    }
+  };
+
+  const resumeSilentAudioContext = () => {
+    try {
+      if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume();
+      }
+    } catch (_) {}
+  };
+
+  // Start/stop the silent audio context with playback
   useEffect(() => {
-    if (silentAudioRef.current) {
-      if (isPlaying) {
-        silentAudioRef.current.play().catch(err => console.log("Silent audio play failed:", err));
-      } else {
+    if (isPlaying) {
+      startSilentAudioContext();
+      resumeSilentAudioContext();
+      // Also keep the <audio> tag playing as a secondary fallback
+      if (silentAudioRef.current) {
+        silentAudioRef.current.play().catch(() => {});
+      }
+    } else {
+      if (silentAudioRef.current) {
         silentAudioRef.current.pause();
       }
     }
@@ -118,29 +158,51 @@ export default function App() {
     });
   };
 
-  // Resume playback when the page becomes visible again (e.g. another app exits fullscreen)
+  // Resume playback when the page becomes visible again
+  // (screen unlock, alt-tab back, another app exiting fullscreen)
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Page is being hidden — record whether we were playing
-        wasPlayingRef.current = !!playerRef.current &&
-          typeof playerRef.current.getPlayerState === "function" &&
-          playerRef.current.getPlayerState() === 1; // 1 = PLAYING
-      } else {
-        // Page is visible again — resume if we were playing before
-        if (wasPlayingRef.current && playerRef.current && playerRef.current.playVideo) {
+    const resumePlayback = () => {
+      resumeSilentAudioContext();
+      if (wasPlayingRef.current && playerRef.current?.playVideo) {
+        // Retry up to 5 times with increasing delays — mobile browsers
+        // need a moment to restore the audio session after screen unlock
+        const delays = [200, 600, 1200, 2000, 3000];
+        delays.forEach(delay => {
           setTimeout(() => {
             try {
-              playerRef.current.playVideo();
+              if (playerRef.current?.getPlayerState?.() !== 1) {
+                playerRef.current.playVideo();
+                resumeSilentAudioContext();
+              }
             } catch (_) {}
-          }, 200);
-        }
+          }, delay);
+        });
         wasPlayingRef.current = false;
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        wasPlayingRef.current = !!playerRef.current &&
+          typeof playerRef.current.getPlayerState === "function" &&
+          playerRef.current.getPlayerState() === 1;
+      } else {
+        resumePlayback();
+      }
+    };
+
+    // iOS Safari uses pageshow/pagehide instead of visibilitychange in some cases
+    const handlePageShow = (e) => {
+      if (!e.persisted) return; // only care about BFCache restores
+      resumePlayback();
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
   }, []);
 
   // Poll current time while playing

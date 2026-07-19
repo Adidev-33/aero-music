@@ -219,8 +219,87 @@ export default function NowPlayingView() {
         )}
       </section>
 
-      <aside className="w-full lg:w-[420px] flex-shrink-0 h-full flex flex-col py-2">
-        <div className="glass-panel rounded-lg p-panel-padding flex flex-col gap-element-gap border border-white/5 h-full overflow-hidden">
+      <aside className="w-full lg:w-[420px] flex-shrink-0 h-full flex flex-col py-2 gap-3 overflow-y-auto lg:overflow-hidden no-scrollbar">
+
+        {/* ── Mobile Currently Playing Card (hidden on desktop) ── */}
+        {currentTrack && (
+          <div className="lg:hidden glass-panel rounded-lg p-4 border border-white/5 flex-shrink-0">
+            {/* Album art + track info row */}
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 shadow-xl">
+                <img
+                  src={getTrackImage(currentTrack)}
+                  alt={currentTrack.title}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[9px] font-semibold text-primary/40 uppercase tracking-widest block mb-0.5">Currently Playing</span>
+                <h2 className="font-bold text-base text-primary truncate leading-tight">{currentTrack.title}</h2>
+                <p className="text-xs text-on-surface-variant truncate mt-0.5">
+                  {getTrackSubtitle(currentTrack)}{currentTrack.album?.name ? ` • ${currentTrack.album.name}` : ""}
+                </p>
+              </div>
+              <button
+                onClick={onToggleLike}
+                className={`flex-shrink-0 transition-all active:scale-95 ${isLiked ? "text-red-500" : "text-on-surface-variant hover:text-primary"}`}
+              >
+                <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: isLiked ? "'FILL' 1" : "'FILL' 0" }}>favorite</span>
+              </button>
+            </div>
+
+            {/* Seekbar */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-[10px] text-on-surface-variant w-8 text-right tabular-nums">{formatTime(displayTime)}</span>
+              <input
+                type="range"
+                min="0"
+                max={duration || 100}
+                value={displayTime}
+                onMouseDown={() => { setIsDragging(true); setDragValue(currentTime); }}
+                onTouchStart={() => { setIsDragging(true); setDragValue(currentTime); }}
+                onChange={(e) => setDragValue(Number(e.target.value))}
+                onMouseUp={() => { setIsDragging(false); onSeek(dragValue); }}
+                onTouchEnd={() => { setIsDragging(false); onSeek(dragValue); }}
+                className="flex-1 h-1 rounded-full appearance-none cursor-pointer accent-primary focus:outline-none"
+                style={{
+                  background: `linear-gradient(to right, #ffffff 0%, #ffffff ${progressPercent}%, rgba(255,255,255,0.1) ${progressPercent}%, rgba(255,255,255,0.1) 100%)`
+                }}
+              />
+              <span className="text-[10px] text-on-surface-variant w-8 tabular-nums">{formatTime(duration)}</span>
+            </div>
+
+            {/* Playback controls */}
+            <div className="flex items-center justify-between px-1">
+              <button onClick={onToggleShuffle} className={`transition-all active:scale-95 ${shuffle ? "text-secondary" : "text-on-surface-variant hover:text-primary"}`}>
+                <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: shuffle ? "'FILL' 1" : "'FILL' 0" }}>shuffle</span>
+              </button>
+              <button onClick={onPrev} className="text-primary active:scale-90 transition-all">
+                <span className="material-symbols-outlined text-[32px]">skip_previous</span>
+              </button>
+              <button
+                onClick={onPlayPause}
+                className="w-14 h-14 rounded-full bg-primary text-background flex items-center justify-center active:scale-90 transition-all shadow-lg shadow-primary/20"
+              >
+                <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  {isPlaying ? "pause" : "play_arrow"}
+                </span>
+              </button>
+              <button onClick={onNext} className="text-primary active:scale-90 transition-all">
+                <span className="material-symbols-outlined text-[32px]">skip_next</span>
+              </button>
+              <button onClick={onToggleRepeat} className={`transition-all active:scale-95 ${repeatMode !== "none" ? "text-secondary" : "text-on-surface-variant hover:text-primary"}`}>
+                <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: repeatMode !== "none" ? "'FILL' 1" : "'FILL' 0" }}>
+                  {repeatMode === "one" ? "repeat_one" : "repeat"}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Up Next Panel ── */}
+        <div className="glass-panel rounded-lg p-panel-padding flex flex-col gap-element-gap border border-white/5 lg:h-full lg:overflow-hidden flex-shrink-0 lg:flex-shrink">
           {/* Header */}
           <div className="flex justify-between items-center mb-2 flex-shrink-0">
             <h3 className="font-semibold text-lg md:text-xl text-primary flex items-center gap-2">
