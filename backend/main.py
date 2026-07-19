@@ -53,7 +53,13 @@ def search(q: str = Query(..., description="Search query"), filter: str = Query(
             elif filter_lower in ["videos", "video"]:
                 yt_filter = "videos"
         
-        results = yt.search(q, filter=yt_filter)
+        try:
+            results = yt.search(q, filter=yt_filter)
+        except Exception as parse_err:
+            # Unfiltered search can fail due to top-result card parsing issues;
+            # fall back to songs filter for reliability
+            logger.warning(f"Unfiltered search failed, retrying with songs filter: {parse_err}")
+            results = yt.search(q, filter="songs")
         return results
     except Exception as e:
         logger.error(f"Search failed: {e}")
