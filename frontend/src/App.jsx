@@ -4,6 +4,8 @@ import SideNavBar from "./components/SideNavBar";
 import PlayerBar from "./components/PlayerBar";
 import BottomNavBar from "./components/BottomNavBar";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -118,7 +120,7 @@ export default function App() {
     setIsLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:8000/api/search?q=${encodeURIComponent(
+        `${API_BASE}/api/search?q=${encodeURIComponent(
           queryToSearch
         )}&filter=${filterToUse}`
       );
@@ -152,7 +154,7 @@ export default function App() {
       try {
         const queryName = item.title || item.name || item.artist;
         const res = await fetch(
-          `http://localhost:8000/api/search?q=${encodeURIComponent(queryName)}&filter=songs`
+          `${API_BASE}/api/search?q=${encodeURIComponent(queryName)}&filter=songs`
         );
         const data = await res.json();
         if (data && data.length > 0) {
@@ -230,7 +232,7 @@ export default function App() {
     setLyrics("");
     setLyricsSnippet("");
     try {
-      const res = await fetch(`http://localhost:8000/api/queue/${videoId}`);
+      const res = await fetch(`${API_BASE}/api/queue/${videoId}`);
       const data = await res.json();
 
       if (data && data.tracks) {
@@ -241,7 +243,7 @@ export default function App() {
       const lyricsId = data?.lyrics;
       if (lyricsId) {
         try {
-          const lyricsRes = await fetch(`http://localhost:8000/api/lyrics/${lyricsId}`);
+          const lyricsRes = await fetch(`${API_BASE}/api/lyrics/${lyricsId}`);
           const lyricsData = await lyricsRes.json();
           const lyricsText = lyricsData?.lyrics;
           if (lyricsText && !lyricsText.includes("not available") && !lyricsText.includes("Error")) {
@@ -255,7 +257,7 @@ export default function App() {
 
       // Fallback: get lyrics browse id from song details (enriched endpoint)
       try {
-        const songRes = await fetch(`http://localhost:8000/api/song/${videoId}`);
+        const songRes = await fetch(`${API_BASE}/api/song/${videoId}`);
         const songData = await songRes.json();
         // Our enriched endpoint adds lyricsId at top level; also check nested
         const songLyricsId =
@@ -264,7 +266,7 @@ export default function App() {
           songData?.lyrics?.browseId ||
           null;
         if (songLyricsId) {
-          const lyricsRes = await fetch(`http://localhost:8000/api/lyrics/${songLyricsId}`);
+          const lyricsRes = await fetch(`${API_BASE}/api/lyrics/${songLyricsId}`);
           const lyricsData = await lyricsRes.json();
           const lyricsText = lyricsData?.lyrics;
           if (lyricsText && !lyricsText.includes("not available")) {
@@ -292,12 +294,12 @@ export default function App() {
     setLyricsSnippet("");
     try {
       // Try watch playlist lyrics ID first (fast path)
-      const res = await fetch(`http://localhost:8000/api/queue/${videoId}`);
+      const res = await fetch(`${API_BASE}/api/queue/${videoId}`);
       const data = await res.json();
       const lyricsId = data?.lyrics;
       if (lyricsId) {
         try {
-          const lyricsRes = await fetch(`http://localhost:8000/api/lyrics/${lyricsId}`);
+          const lyricsRes = await fetch(`${API_BASE}/api/lyrics/${lyricsId}`);
           const lyricsData = await lyricsRes.json();
           const lyricsText = lyricsData?.lyrics;
           if (lyricsText && !lyricsText.includes("not available") && !lyricsText.includes("Error")) {
@@ -310,11 +312,11 @@ export default function App() {
       }
       // Fallback: song endpoint
       try {
-        const songRes = await fetch(`http://localhost:8000/api/song/${videoId}`);
+        const songRes = await fetch(`${API_BASE}/api/song/${videoId}`);
         const songData = await songRes.json();
         const songLyricsId = songData?.lyricsId || songData?.lyrics?.lyricsId || songData?.lyrics?.browseId || null;
         if (songLyricsId) {
-          const lyricsRes = await fetch(`http://localhost:8000/api/lyrics/${songLyricsId}`);
+          const lyricsRes = await fetch(`${API_BASE}/api/lyrics/${songLyricsId}`);
           const lyricsData = await lyricsRes.json();
           const lyricsText = lyricsData?.lyrics;
           if (lyricsText && !lyricsText.includes("not available")) {
